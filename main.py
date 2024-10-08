@@ -4,65 +4,66 @@ import pygwalker as pyg
 import streamlit.components.v1 as components
 from pygwalker.api.streamlit import StreamlitRenderer
 
-# Mengatur halaman Streamlit
-st.set_page_config(page_title="PyGWalker in Streamlit", layout="wide")
-st.title("Aplikasi Visualisasi Data Real-time dengan Streamlit dan Pygwalker")
+# Adjust the width of the Streamlit page
+st.set_page_config(
+    page_title="Data Analisis BPJS Antrol",
+    layout="wide"
+)
 
 # Nama file CSV
 csv_file = './data/juli 2024.csv'
 
 # Fungsi untuk memuat CSV
-@st.cache_resource
+@st.cache_data
 def load_data():
     # Membaca file CSV menggunakan pandas
     data = pd.read_csv(csv_file)
+    
+    # Pastikan kolom tanggal berbentuk datetime
+    data['tanggal_periksa'] = pd.to_datetime(data['tanggal_periksa'], errors='coerce')
     return data
 
-# Fungsi untuk mendapatkan renderer dari Pygwalker
+# Fungsi untuk mendapatkan renderer pygwalker (menggunakan caching untuk efisiensi)
 @st.cache_resource
-def get_pyg_renderer(df: pd.DataFrame) -> StreamlitRenderer:
-    # Renderer ini dapat menggunakan konfigurasi JSON untuk kustomisasi Pygwalker
+def get_pyg_renderer(df: pd.DataFrame) -> "StreamlitRenderer":
+    # Jika ingin menyimpan konfigurasi chart, set `spec_io_mode="rw"`
     return StreamlitRenderer(df, spec="./gw_config.json", spec_io_mode="rw")
 
-# Tab untuk eksplorasi, data profiling, dan chart
-tab1, tab2, tab3 = st.tabs(["Explorer", "Data Profiling", "Charts"])
+# Aplikasi Streamlit
+st.title('Data Analisis BPJS Antrol')
 
-# Menampilkan data dan Pygwalker dalam tab
-with tab1:
-    if st.button('Refresh Data'):
-        data = load_data()
-        
-        # Menampilkan data terbaru
-        with st.container():
-            st.write("Menampilkan data terbaru:")
-            st.write(data)
-        
-        # Menggunakan pygwalker untuk analisis dan visualisasi
-        with st.container():
-            st.write("Analisis dan Visualisasi dengan Pygwalker:")
-            
-            # Menghasilkan visualisasi Pygwalker dalam bentuk HTML
-            pyg_html = pyg.walk(data).to_html()
-            
-            # Menampilkan HTML visualisasi dengan Streamlit components
-            components.html(pyg_html, height=600, width=900, scrolling=False)
+st.write('Aplikasi ini menampilkan data secara real-time dari file CSV yang terus diperbarui.')
+
+# Memuat data
+data = load_data()
+
+# Menampilkan widget untuk memilih rentang tanggal
+st.write('Filter Data Berdasarkan Tanggal Periksa:')
+start_date = st.date_input('Tanggal Mulai', value=pd.to_datetime(data['tanggal_periksa'].min()).date())
+end_date = st.date_input('Tanggal Selesai', value=pd.to_datetime(data['tanggal_periksa'].max()).date())
+
+# Pastikan tanggal mulai tidak melebihi tanggal selesai
+if start_date > end_date:
+    st.error('Tanggal mulai tidak boleh melebihi tanggal selesai.')
+
+# Tombol untuk refresh data
+if st.button('Refresh Data'):
+    # Filter data berdasarkan tanggal yang dipilih
+    mask = (data['tanggal_periksa'] >= pd.to_datetime(start_date)) & (data['tanggal_periksa'] <= pd.to_datetime(end_date))
+    filtered_data = data.loc[mask]
+
+    st.write('Menampilkan data terbaru berdasarkan filter tanggal:')
+    with st.container():
+        st.write(filtered_data)
+
+    # Menggunakan container untuk memuat Pygwalker dengan renderer
+    st.write('Analisis dan Visualisasi dengan Pygwalker:')
     
-    # Renderer untuk interaktif explorer
-    df = load_data()
-    renderer = get_pyg_renderer(df)
-    renderer.explorer()
+    # Membuat renderer pygwalker
+    renderer = get_pyg_renderer(filtered_data)
 
-with tab2:
-    # Tab untuk profiling data
-    st.write("Profiling Data:")
-    renderer.explorer(default_tab="data")
+    # Render Pygwalker explorer secara responsif
+    renderer.render_explore()
 
-with tab3:
-    # Menampilkan beberapa visualisasi statis (chart 0 dan chart 1)
-    st.subheader("Registered per Weekday")
-    renderer.chart(0)
-    
-    st.subheader("Registered per Day")
-    renderer.chart(1)
-
+# Pesan instruksi tambahan
 st.write('Klik "Refresh Data" untuk memperbarui data secara real-time.')
