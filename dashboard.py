@@ -81,7 +81,7 @@ if 'filtered_data' in st.session_state:
     st.write('Analisis dan Visualisasi dengan Pygwalker:')
     # renderer = get_pyg_renderer(filtered_data)
     # renderer.render_explore()
-
+  
     # Generate the HTML using Pygwalker
     pyg_html = pyg.walk(filtered_data).to_html()
 
