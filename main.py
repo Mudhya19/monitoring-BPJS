@@ -23,6 +23,10 @@ def load_data(uploaded_file):
         return data
     return None
 
+
+# with st.sidebar:
+#     st.image("simrs.png")
+
 # Fungsi untuk reset state
 def reset_state():
     for key in list(st.session_state.keys()):
@@ -77,6 +81,8 @@ if data is not None:
             # Visualisasi Pygwalker hanya jika ada perubahan data
             if 'pygwalker_html' not in st.session_state or st.session_state['filtered_data'] is not filtered_data:
                 st.session_state['pygwalker_html'] = pyg.walk(filtered_data).to_html()
+            
+            st.sidebar.success('Analysis Report telah diperbarui.')
 
             # Embed the stored HTML into the Streamlit app
             components.html(st.session_state['pygwalker_html'], height=1000, scrolling=True)
