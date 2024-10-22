@@ -91,7 +91,7 @@ if data is not None:
     
     if st.sidebar.button('Reset Data'):
         reset_state()
-        st.experimental_rerun()
+        # st.experimental_rerun()
 
     # Hanya render visualisasi jika ada data yang difilter
     if 'filtered_data' in st.session_state:
