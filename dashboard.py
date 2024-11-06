@@ -2,91 +2,166 @@ import streamlit as st
 import pandas as pd
 import pygwalker as pyg
 import streamlit.components.v1 as components
-# from IPython.display import display, HTML
-from pygwalker.api.streamlit import StreamlitRenderer, init_streamlit_comm
+from pygwalker.api.streamlit import init_streamlit_comm
+import MySQLdb
+import os
+from datetime import datetime, timedelta
 
 # Set page config for wide layout
 st.set_page_config(
-    page_title="Data Analisis BPJS Antrol",
+    page_title="Data Analisis SIMRS",
     layout="wide"
 )
 
-# Establish communication between pygwalker and streamlit
+# Establish communication between pygwalker and Streamlit
 init_streamlit_comm()
 
-# Nama file CSV
-csv_file = './data/juli 2024.csv'
-
-# Fungsi untuk memuat CSV
-@st.cache_data
-def load_data():
-    # Membaca file CSV menggunakan pandas
-    data = pd.read_csv(csv_file)
-
-    # Pastikan kolom tanggal berbentuk datetime
-    data['tanggal_periksa'] = pd.to_datetime(
-        data['tanggal_periksa'], errors='coerce')
+# Function to format `jam_reg` to HH:MM:SS
+def format_jam_reg(data):
+    """Format `jam_reg` column in the DataFrame to HH:MM:SS if needed."""
+    if 'jam_reg' in data.columns:
+        def format_time(value):
+            if isinstance(value, str):  # if it's a string, try to parse it
+                try:
+                    if len(value) <= 5:  # Assume HH:MM format
+                        return datetime.strptime(value, '%H:%M').strftime('%H:%M:%S')
+                    elif len(value) == 8:  # Assume already in HH:MM:SS format
+                        return value
+                except ValueError:
+                    return value  # return as-is if formatting fails
+            elif isinstance(value, timedelta):  # if it's a timedelta, format it directly
+                total_seconds = int(value.total_seconds())
+                hours = total_seconds // 3600
+                minutes = (total_seconds % 3600) // 60
+                seconds = total_seconds % 60
+                return f"{hours:02}:{minutes:02}:{seconds:02}"
+            return value  # return the value as-is if it doesn't match expected types
+        
+        data['jam_reg'] = data['jam_reg'].apply(format_time)
     return data
 
-# Fungsi untuk mendapatkan renderer pygwalker (menggunakan caching untuk efisiensi)
-# @st.cache_resource
-# def get_pyg_renderer(df: pd.DataFrame) -> "StreamlitRenderer":
-#     # Jika ingin menyimpan konfigurasi chart, set `spec_io_mode="rw"`
-#     return StreamlitRenderer(df, spec="./gw_config.json", spec_io_mode="rw")
+# Function to load data from database based on query
+@st.cache_data(show_spinner=True)
+def init_connection(start_date, end_date):
+    try:
+        connection = MySQLdb.connect(
+            host=os.getenv("DB_HOST", "192.168.11.5"), 
+            user=os.getenv("DB_USER", "rsds_db"),
+            passwd=os.getenv("DB_PASS", "rsdsD4t4b4s3"),
+            db=os.getenv("DB_NAME", "rsds_db"),
+            port=int(os.getenv("DB_PORT", 3306))
+        )
 
+        cursor = connection.cursor(MySQLdb.cursors.DictCursor)
+        
+        # Query tetap sama
+        query = f"""
+            SELECT
+            reg_periksa.no_rawat,
+            mlite_antrian_referensi.tanggal_periksa,
+            reg_periksa.jam_reg,
+            poliklinik.nm_poli,
+            dokter.nm_dokter,
+            pasien.nm_pasien,
+            pasien.no_rkm_medis,
+            reg_periksa.status_lanjut,
+            reg_periksa.status_bayar,
+            reg_periksa.kd_dokter,
+            mlite_antrian_referensi.nomor_kartu,
+            mlite_antrian_referensi.nomor_referensi,
+            mlite_antrian_referensi.kodebooking,
+            mlite_antrian_referensi.jenis_kunjungan,
+            mlite_antrian_referensi.status_kirim,
+            mlite_antrian_referensi.keterangan 
+            FROM
+                reg_periksa
+                INNER JOIN pasien ON reg_periksa.no_rkm_medis = pasien.no_rkm_medis
+                INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
+                INNER JOIN dokter ON reg_periksa.kd_dokter = dokter.kd_dokter
+                INNER JOIN poliklinik ON reg_periksa.kd_poli = poliklinik.kd_poli
+                INNER JOIN mlite_antrian_referensi ON reg_periksa.no_rkm_medis = mlite_antrian_referensi.no_rkm_medis 
+            WHERE
+                mlite_antrian_referensi.tanggal_periksa BETWEEN '{start_date}' 
+                AND '{end_date}' AND poliklinik.nm_poli != 'INSTALASI GAWAT DARURAT'
+            ORDER BY
+                CONCAT( mlite_antrian_referensi.tanggal_periksa, ' ', reg_periksa.jam_reg);
+        """
 
-# Aplikasi Streamlit
-st.title('Data Analisis BPJS Antrol')
+        cursor.execute(query)
+        data = cursor.fetchall()
+        cursor.close()
+        connection.close()
 
-# Memuat data
-data = load_data()
+        df = pd.DataFrame(data)
+        return format_jam_reg(df)  # Apply time formatting
 
-# Memulai sesi state jika belum ada
-if 'start_date' not in st.session_state:
-    st.session_state['start_date'] = pd.to_datetime(
-        data['tanggal_periksa'].min()).date()
-if 'end_date' not in st.session_state:
-    st.session_state['end_date'] = pd.to_datetime(
-        data['tanggal_periksa'].max()).date()
+    except MySQLdb.Error as err:
+        st.error(f"Database Error: {err}")
+        return None
 
-# Menampilkan widget untuk memilih rentang tanggal
-st.write('Filter Data Berdasarkan Tanggal Periksa:')
-start_date = st.date_input('Tanggal Mulai',value=st.session_state['start_date'])
-end_date = st.date_input('Tanggal Selesai', value=st.session_state['end_date'])
+# Function to reset state
+def reset_state():
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
 
-# Update session state untuk tanggal
-st.session_state['start_date'] = start_date
-st.session_state['end_date'] = end_date
+# Streamlit app
+st.title('Data Analisis Pasien BPJS')
 
-# Pastikan tanggal mulai tidak melebihi tanggal selesai
-if start_date > end_date:
-    st.error('Tanggal mulai tidak boleh melebihi tanggal selesai.')
+# Sidebar for date filtering
+st.sidebar.title("Filter Tanggal")
 
-# Tombol untuk refresh data
-if st.button('Refresh Data'):
-    # Filter data berdasarkan tanggal yang dipilih
-    mask = (data['tanggal_periksa'] >= pd.to_datetime(start_date)) & (data['tanggal_periksa'] <= pd.to_datetime(end_date))
-    st.session_state['filtered_data'] = data.loc[mask]
+# Initialize date filter
+start_date = st.sidebar.date_input('Tanggal Mulai')
+end_date = st.sidebar.date_input('Tanggal Selesai')
 
-    # Menampilkan notifikasi hanya setelah refresh data
-    st.success('Data telah diperbarui.')
+# Convert selected dates to SQL string format
+start_date_str = start_date.strftime('%Y-%m-%d')
+end_date_str = end_date.strftime('%Y-%m-%d')
 
-# Menampilkan data terbaru berdasarkan filter tanggal
+# Button to refresh data
+if st.sidebar.button('Refresh Data'):
+    if start_date and end_date:
+        filtered_data = init_connection(start_date_str, end_date_str)
+        if filtered_data is not None and not filtered_data.empty:
+            st.session_state['filtered_data'] = filtered_data
+            st.sidebar.success('Data telah diperbarui.')
+        else:
+            st.error('Tidak ada data yang ditemukan atau gagal memuat data.')
+
+# Button to display dashboard
+if st.sidebar.button('View Dashboard'):
+    if 'filtered_data' in st.session_state:
+        filtered_data = st.session_state['filtered_data']
+        
+        # Display Pygwalker visualization only if data changes
+        if 'pygwalker_html' not in st.session_state or st.session_state['filtered_data'] is not filtered_data:
+            try:
+                st.session_state['pygwalker_html'] = pyg.walk(filtered_data).to_html()
+            except Exception as e:
+                st.error(f"Error creating visualization with pygwalker: {e}")
+                st.write("Preview of the data:")
+                st.write(filtered_data.head())  # Show a preview if visualization fails
+        
+        st.sidebar.success('Analysis Report telah diperbarui.')
+
+        # Embed stored HTML into Streamlit app
+        if 'pygwalker_html' in st.session_state:
+            components.html(st.session_state['pygwalker_html'], height=1000, scrolling=True)
+    else:
+        st.error("Tidak ada data yang difilter. Silakan klik 'Refresh Data' untuk memfilter data terlebih dahulu.")
+
+# Button to reset data
+if st.sidebar.button('Reset Data'):
+    reset_state()
+
+# Render filtered data if available
 if 'filtered_data' in st.session_state:
     filtered_data = st.session_state['filtered_data']
     st.write('Menampilkan data terbaru berdasarkan filter tanggal:')
     st.write(filtered_data)
 
-    # Menampilkan Pygwalker di luar tombol refresh agar tidak terus ter-refresh
-    st.write('Analisis dan Visualisasi dengan Pygwalker:')
-    # renderer = get_pyg_renderer(filtered_data)
-    # renderer.render_explore()
-  
-    # Generate the HTML using Pygwalker
-    pyg_html = pyg.walk(filtered_data).to_html()
+else:
+    st.write("Silakan filter data dengan tekan tombol refresh data.")
 
-    # Embed the HTML into the Streamlit app
-    components.html(pyg_html, height=1000, scrolling=True)
-
-# Pesan instruksi tambahan
-st.write('Klik "Refresh Data" untuk memperbarui data berdasarkan tanggal yang dipilih.')
+# Additional instruction message
+st.sidebar.write('Klik "Refresh Data" untuk memperbarui data berdasarkan filter yang dipilih.')
