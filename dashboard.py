@@ -56,36 +56,53 @@ def init_connection(start_date, end_date):
         
         # Query tetap sama
         query = f"""
+        SELECT
+            r.no_rawat,
+            mr.tanggal_periksa,
+            r.jam_reg,
+            pl.nm_poli,
+            d.nm_dokter,
+            p.nm_pasien,
+            p.no_rkm_medis,
+            r.status_lanjut,
+            r.status_bayar,
+            r.kd_dokter,
+            mr.nomor_kartu,
+            mr.nomor_referensi,
+            mr.kodebooking,
+            mr.jenis_kunjungan,
+            mr.status_kirim,
+            mr.keterangan 
+        FROM
+            reg_periksa r
+            INNER JOIN pasien p ON r.no_rkm_medis = p.no_rkm_medis
+            INNER JOIN penjab pj ON r.kd_pj = pj.kd_pj
+            INNER JOIN dokter d ON r.kd_dokter = d.kd_dokter
+            INNER JOIN poliklinik pl ON r.kd_poli = pl.kd_poli
+            INNER JOIN mlite_antrian_referensi mr ON r.no_rkm_medis = mr.no_rkm_medis 
+        WHERE
+            mr.tanggal_periksa BETWEEN '{start_date}' 
+            AND '{end_date}' 
+            AND pl.nm_poli != 'INSTALASI GAWAT DARURAT' 
+            AND ( mr.tanggal_periksa, r.jam_reg ) IN (
             SELECT
-            reg_periksa.no_rawat,
-            mlite_antrian_referensi.tanggal_periksa,
-            reg_periksa.jam_reg,
-            poliklinik.nm_poli,
-            dokter.nm_dokter,
-            pasien.nm_pasien,
-            pasien.no_rkm_medis,
-            reg_periksa.status_lanjut,
-            reg_periksa.status_bayar,
-            reg_periksa.kd_dokter,
-            mlite_antrian_referensi.nomor_kartu,
-            mlite_antrian_referensi.nomor_referensi,
-            mlite_antrian_referensi.kodebooking,
-            mlite_antrian_referensi.jenis_kunjungan,
-            mlite_antrian_referensi.status_kirim,
-            mlite_antrian_referensi.keterangan 
+                MIN( mr_inner.tanggal_periksa ),
+                MIN( r_inner.jam_reg ) 
             FROM
-                reg_periksa
-                INNER JOIN pasien ON reg_periksa.no_rkm_medis = pasien.no_rkm_medis
-                INNER JOIN penjab ON reg_periksa.kd_pj = penjab.kd_pj
-                INNER JOIN dokter ON reg_periksa.kd_dokter = dokter.kd_dokter
-                INNER JOIN poliklinik ON reg_periksa.kd_poli = poliklinik.kd_poli
-                INNER JOIN mlite_antrian_referensi ON reg_periksa.no_rkm_medis = mlite_antrian_referensi.no_rkm_medis 
+                reg_periksa r_inner
+                INNER JOIN mlite_antrian_referensi mr_inner ON r_inner.no_rkm_medis = mr_inner.no_rkm_medis 
             WHERE
-                mlite_antrian_referensi.tanggal_periksa BETWEEN '{start_date}' 
-                AND '{end_date}' AND poliklinik.nm_poli != 'INSTALASI GAWAT DARURAT'
-            ORDER BY
-                CONCAT( mlite_antrian_referensi.tanggal_periksa, ' ', reg_periksa.jam_reg);
-        """
+                mr_inner.tanggal_periksa BETWEEN '{start_date}' 
+                AND '{end_date}' 
+            GROUP BY
+                r_inner.no_rkm_medis 
+            ) 
+        GROUP BY
+            r.no_rawat 
+        ORDER BY
+            mr.tanggal_periksa,
+            r.jam_reg;        
+            """
 
         cursor.execute(query)
         data = cursor.fetchall()
@@ -93,7 +110,7 @@ def init_connection(start_date, end_date):
         connection.close()
 
         df = pd.DataFrame(data)
-        return format_jam_reg(df)  # Apply time formatting
+        return format_jam_reg(df.drop_duplicates())  # Apply time formatting
 
     except MySQLdb.Error as err:
         st.error(f"Database Error: {err}")
