@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 # Set page config for wide layout
 st.set_page_config(
-    page_title="Data Analisis SIMRS",
+    page_title="Data Analisis BPJS",
     layout="wide"
 )
 
