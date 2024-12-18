@@ -57,44 +57,40 @@ def init_connection(start_date, end_date):
         # Query tetap sama
         query = f"""
         SELECT
-            r.no_rawat,
-            mr.tanggal_periksa,
-            r.jam_reg,
-            pl.nm_poli,
+            rp.no_rawat,
+            rp.tgl_registrasi,
+            rp.jam_reg,
+            rp.kd_dokter,
             d.nm_dokter,
-            p.nm_pasien,
-            p.no_rkm_medis,
-            r.status_lanjut,
-            # r.status_bayar,
+            rp.no_rkm_medis,
+            pas.nm_pasien,
+            rp.kd_poli,
+            p.nm_poli,
+            rp.kd_pj,
             pj.png_jawab,
-            # r.kd_dokter,
-            mr.nomor_kartu,
-            mr.nomor_referensi,
-            mr.kodebooking,
-            mr.jenis_kunjungan,
-            mr.status_kirim,
-            mr.keterangan
+            mar.nomor_kartu,
+            mar.nomor_referensi,
+            mar.kodebooking,
+            mar.jenis_kunjungan,
+            mar.status_kirim,
+            mar.keterangan
         FROM
-            reg_periksa r
-            INNER JOIN pasien p ON r.no_rkm_medis = p.no_rkm_medis
-            INNER JOIN penjab pj ON r.kd_pj = pj.kd_pj
-            INNER JOIN dokter d ON r.kd_dokter = d.kd_dokter
-            INNER JOIN poliklinik pl ON r.kd_poli = pl.kd_poli
-            INNER JOIN mlite_antrian_referensi mr ON r.no_rkm_medis = mr.no_rkm_medis
+            reg_periksa rp
+        JOIN
+            mlite_antrian_referensi mar ON rp.no_rkm_medis = mar.no_rkm_medis
+        JOIN
+            poliklinik p ON rp.kd_poli = p.kd_poli
+        JOIN
+            dokter d ON rp.kd_dokter = d.kd_dokter
+        JOIN
+            penjab pj ON rp.kd_pj = pj.kd_pj
+        JOIN
+            pasien pas ON rp.no_rkm_medis = pas.no_rkm_medis
         WHERE
-            mr.tanggal_periksa BETWEEN '{start_date}' AND '{end_date}'
-            AND pl.nm_poli != 'INSTALASI GAWAT DARURAT'
-            AND (mr.tanggal_periksa, r.jam_reg) IN (
-                SELECT MIN(mr_inner.tanggal_periksa), MIN(r_inner.jam_reg)
-                FROM reg_periksa r_inner
-                INNER JOIN mlite_antrian_referensi mr_inner ON r_inner.no_rkm_medis = mr_inner.no_rkm_medis
-                WHERE mr_inner.tanggal_periksa BETWEEN '{start_date}' AND '{end_date}'
-                GROUP BY r_inner.no_rkm_medis
-            )
-        GROUP BY
-            r.no_rawat
-        ORDER BY
-            mr.tanggal_periksa, r.jam_reg;
+            rp.tgl_registrasi BETWEEN '{start_date}' AND '{end_date}'
+            AND mar.tanggal_periksa BETWEEN '{start_date}' AND '{end_date}'
+            AND rp.kd_poli NOT IN ('IGDK', 'HDL', 'BBL', 'IRM')
+            AND rp.status_lanjut NOT IN ('Ranap')
         """
 
         cursor.execute(query)
