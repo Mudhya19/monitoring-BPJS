@@ -56,7 +56,7 @@ def init_connection(start_date, end_date):
         
         # Query tetap sama
         query = f"""
-        SELECT
+        SELECT 
             rp.no_rawat,
             rp.tgl_registrasi,
             rp.jam_reg,
@@ -66,31 +66,38 @@ def init_connection(start_date, end_date):
             pas.nm_pasien,
             rp.kd_poli,
             p.nm_poli,
+            rp.status_lanjut,
             rp.kd_pj,
             pj.png_jawab,
+            mar.tanggal_periksa,
             mar.nomor_kartu,
             mar.nomor_referensi,
             mar.kodebooking,
             mar.jenis_kunjungan,
             mar.status_kirim,
-            mar.keterangan
-        FROM
+            mar.keterangan,
+            bs.user
+        FROM 
             reg_periksa rp
-        JOIN
+        JOIN 
             mlite_antrian_referensi mar ON rp.no_rkm_medis = mar.no_rkm_medis
-        JOIN
+        JOIN 
             poliklinik p ON rp.kd_poli = p.kd_poli
-        JOIN
+        JOIN 
             dokter d ON rp.kd_dokter = d.kd_dokter
-        JOIN
+        JOIN 
             penjab pj ON rp.kd_pj = pj.kd_pj
-        JOIN
+        JOIN 
             pasien pas ON rp.no_rkm_medis = pas.no_rkm_medis
+        JOIN
+            bridging_sep bs ON rp.no_rawat = bs.no_rawat
         WHERE
             rp.tgl_registrasi BETWEEN '{start_date}' AND '{end_date}'
             AND mar.tanggal_periksa BETWEEN '{start_date}' AND '{end_date}'
-            AND rp.kd_poli NOT IN ('IGDK', 'HDL', 'BBL', 'IRM')
+            AND rp.kd_poli NOT IN ('IGDK', 'HDL', 'BBL', 'IRM', 'U0016', 'PSI')
             AND rp.status_lanjut NOT IN ('Ranap')
+        ORDER BY 
+            rp.no_rawat;
         """
 
         cursor.execute(query)
@@ -99,7 +106,7 @@ def init_connection(start_date, end_date):
         connection.close()
 
         df = pd.DataFrame(data)
-        return format_jam_reg(df.drop_duplicates())  # Apply time formatting
+        return format_jam_reg(df.drop_duplicates())  # Apply time formatting and remove duplicates
 
     except MySQLdb.Error as err:
         st.error(f"Database Error: {err}")
