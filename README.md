@@ -16,6 +16,7 @@ Apakah ada tren waktu tertentu dalam sehari atau dalam bulan di mana tingkat keg
 Konteks: Mengetahui waktu-waktu kritis dalam pengiriman konfirmasi atau teknis terkait.
 
 
+<<<<<<< HEAD
 <!-- "SELECT pasien.no_peserta,pasien.no_rkm_medis,pasien.no_ktp,pasien.no_tlp,reg_periksa.no_reg,reg_periksa.no_rawat,reg_periksa.tgl_registrasi,reg_periksa.kd_dokter,dokter.nm_dokter,reg_periksa.kd_poli,poliklinik.nm_poli,reg_periksa.stts_daftar,reg_periksa.no_rkm_medis
       FROM reg_periksa INNER JOIN pasien ON reg_periksa.no_rkm_medis=pasien.no_rkm_medis INNER JOIN dokter ON reg_periksa.kd_dokter=dokter.kd_dokter INNER JOIN poliklinik ON reg_periksa.kd_poli=poliklinik.kd_poli WHERE reg_periksa.tgl_registrasi='$date' AND reg_periksa.kd_poli NOT IN ('$exclude_taskid')
       ORDER BY concat(reg_periksa.tgl_registrasi,' ',reg_periksa.jam_reg)"
@@ -60,3 +61,5 @@ Konteks: Mengetahui waktu-waktu kritis dalam pengiriman konfirmasi atau teknis t
             r.no_rawat
         ORDER BY
             mr.tanggal_periksa, r.jam_reg; -->
+=======
+>>>>>>> 8b5ba0347ef82841a0b9c5d161d65dfa69edc9e5
